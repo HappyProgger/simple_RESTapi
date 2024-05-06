@@ -1,0 +1,20 @@
+version: '3.8' # Убедитесь, что вы используете поддерживаемую версию Docker Compose
+
+services:
+  db:
+    image: postgres
+    restart: always
+    environment:
+      POSTGRES_PASSWORD: example
+    volumes:
+      - db_data:/var/lib/postgresql/data # Используйте более описательное имя тома
+
+      
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - "8080:8080" # Исправьте синтаксис портов, добавив кавычки вокруг номера порта
+
+volumes:
+  db_data: # Определите том для хранения данных базы данных

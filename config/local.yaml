@@ -1,0 +1,11 @@
+
+app:
+  adres: '127.0.0.1'
+  port: 6060
+
+db:
+  db_user: postgres
+  db_password: example
+  db_table: postgres
+  adres: '127.0.0.1'
+  port: 5432  
