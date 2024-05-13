@@ -5,9 +5,12 @@ services:
     image: postgres
     restart: always
     environment:
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: example
+      POSTGRES_DB: postgres
     volumes:
       - db_data:/var/lib/postgresql/data # Используйте более описательное имя тома
+      # - ./init.sql:/docker-entrypoint-initdb.d/init.sql
 
       
   adminer:

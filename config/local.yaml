@@ -1,11 +1,14 @@
 
 app:
+  env: local # "local"  "dev"  "prod"
   adres: '127.0.0.1'
   port: 6060
+  timeout: 4s
+  idle_timeout: 30s
 
 db:
   db_user: postgres
   db_password: example
-  db_table: postgres
-  adres: '127.0.0.1'
+  db_name: postgres
+  adres: 'localhost'
   port: 5432  
