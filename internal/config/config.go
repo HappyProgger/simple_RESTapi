@@ -20,24 +20,10 @@ type Config struct {
 	DB struct {
 		DbUser     string `yaml:"db_user"`
 		DbPassword string `yaml:"db_password"`
-		DbName    string `yaml:"db_name"`
+		DbName     string `yaml:"db_name"`
 		Adres      string `yaml:"adres"`
 		Port       int    `yaml:"port"`
 	} `yaml:"db"`
-}
-
-func main() {
-
-	// fmt.Printf("Адрес приложения: %s\n", cfg.App.Adres)
-	// fmt.Printf("Порт приложения: %d\n", cfg.App.Port)
-	// fmt.Printf("Таймаут приложения: %s\n", cfg.App.Timeout)
-	// fmt.Printf("Idle Timeout приложения: %s\n", cfg.App.Idletimeout)
-
-	// fmt.Printf("Пользователь базы данных: %s\n", cfg.DB.DbUser)
-	// fmt.Printf("Пароль базы данных: %s\n", cfg.DB.DbPassword)
-	// fmt.Printf("Таблица базы данных: %s\n", cfg.DB.DbTable)
-	// fmt.Printf("Адрес базы данных: %s\n", cfg.DB.Adres)
-	// fmt.Printf("Порт базы данных: %d\n", cfg.DB.Port)
 }
 
 var cfg Config

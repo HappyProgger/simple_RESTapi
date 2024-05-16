@@ -4,7 +4,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 
 	"github.com/lib/pq"
@@ -17,39 +17,37 @@ type Storage struct {
 	db *sql.DB
 }
 
-func New() (*Storage, error) {
+func New(log *slog.Logger) (*Storage, error) {
 
 	const op = "storage.sqlite.NewStorage" // Имя текущей функции для логов и ошибок
 
 	// Подключение к базе данных
 	dbConfig := config.MustLoad().DB
-	println(dbConfig.DbUser)
+
 	connString := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		dbConfig.Adres, strconv.Itoa(dbConfig.Port), dbConfig.DbUser, dbConfig.DbPassword, dbConfig.DbName)
 
 	db, err := sql.Open("postgres", connString)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("%s: %w", op, err)
+		panic("Can't connect to postgres")
 	}
 
 	// Проверка подключения
 	err = db.Ping()
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
-	fmt.Println("Successfully connected!")
+	log.Info("Successfully connected to Postgres!")
 
 	// Создаем таблицу, если ее еще нет
 	stmt, err := db.Prepare(`
 		CREATE TABLE IF NOT EXISTS url(
-			id INTEGER PRIMARY KEY,
+			id SERIAL  PRIMARY KEY,
 			alias TEXT NOT NULL UNIQUE,
 			url TEXT NOT NULL);
-		CREATE INDEX IF NOT EXISTS idx_alias ON url(alias);
 		`)
-
-	defer stmt.Close()
 
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", op, err)
@@ -60,14 +58,30 @@ func New() (*Storage, error) {
 		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 
+	//добавляем индексы в таблицу по alias
+	stmt, err = db.Prepare(`
+	CREATE INDEX IF NOT EXISTS idx_alias ON url(alias);
+		`)
+
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	_, err = stmt.Exec()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", op, err)
+	}
+
+	defer stmt.Close()
+
 	return &Storage{db: db}, nil
 }
 
 func (s *Storage) SaveURL(urlToSave string, alias string) (int64, error) {
-	const op = "storage.sqlite.SaveURL"
+	const op = "storage.postgresql.SaveURL"
 
-	// Подготавливаем запрос
-	stmt, err := s.db.Prepare("INSERT INTO url(url,alias) values(?,?)")
+	// Подготавливаем запрос с использованием RETURNING для получения последнего вставленного id
+	stmt, err := s.db.Prepare("INSERT INTO url(url, alias) VALUES ($1, $2) RETURNING id")
 	if err != nil {
 		return 0, fmt.Errorf("%s: prepare statement: %w", op, err)
 	}
@@ -75,8 +89,10 @@ func (s *Storage) SaveURL(urlToSave string, alias string) (int64, error) {
 	defer stmt.Close()
 
 	// Выполняем запрос
-	res, err := stmt.Exec(urlToSave, alias)
+	var lastInsertedId int64
+	err = stmt.QueryRow(urlToSave, alias).Scan(&lastInsertedId)
 	if err != nil {
+		// Проверяем на наличие уже существующей записи
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
 			return 0, fmt.Errorf("%s: %w", op, storage.ErrURLExists)
 		}
@@ -84,20 +100,14 @@ func (s *Storage) SaveURL(urlToSave string, alias string) (int64, error) {
 		return 0, fmt.Errorf("%s: execute statement: %w", op, err)
 	}
 
-	// Получаем ID созданной записи
-	id, err := res.LastInsertId()
-	if err != nil {
-		return 0, fmt.Errorf("%s: failed to get last insert id: %w", op, err)
-	}
-
 	// Возвращаем ID
-	return id, nil
+	return lastInsertedId, nil
 }
 
 func (s *Storage) GetURL(alias string) (string, error) {
-	const op = "storage.sqlite.GetURL"
+	const op = "storage.postgresql.GetURL"
 
-	stmt, err := s.db.Prepare("SELECT url FROM url WHERE alias = ?")
+	stmt, err := s.db.Prepare("SELECT url FROM url WHERE alias = $1")
 	if err != nil {
 		return "", fmt.Errorf("%s: prepare statement: %w", op, err)
 	}
