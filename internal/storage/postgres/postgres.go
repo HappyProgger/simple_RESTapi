@@ -126,3 +126,56 @@ func (s *Storage) GetURL(alias string) (string, error) {
 
 	return resURL, nil
 }
+
+func (s *Storage) URLDelete(alias string) error {
+	const op = "storage.postgresql.DeleteURL"
+
+	var exists bool
+	stmt, err := s.db.Prepare("SELECT EXISTS(SELECT 1 FROM url WHERE alias = $1)")
+
+	if err != nil {
+		return fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+
+	err = stmt.QueryRow(alias).Scan(&exists)
+
+	if err != nil && err != sql.ErrNoRows {
+		return fmt.Errorf("%s: query row: %w", op, err)
+	}
+
+	stmt, err = s.db.Prepare("DELETE FROM url WHERE alias = $1")
+	if err != nil {
+		return fmt.Errorf("%s: prepare statement: %w", op, err)
+	}
+
+	defer stmt.Close()
+
+	stmt.Exec()
+
+	if err != nil {
+		// Проверяем на наличие уже существующей записи
+		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			return fmt.Errorf("%s: %w", op, storage.ErrURLExists)
+		}
+
+		return fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	if !exists {
+		return storage.ErrURLNotFound
+	}
+
+	defer stmt.Close()
+
+	_, err = stmt.Exec(alias)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return storage.ErrURLNotFound
+	}
+
+	if err != nil {
+		return fmt.Errorf("%s: execute statement: %w", op, err)
+	}
+
+	return nil
+}

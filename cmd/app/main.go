@@ -13,6 +13,8 @@ import (
 
 	"simple_RESTapi/internal/config"
 	logger "simple_RESTapi/internal/http-server"
+	"simple_RESTapi/internal/http-server/handlers/delete"
+	"simple_RESTapi/internal/http-server/handlers/redirect"
 	"simple_RESTapi/internal/http-server/handlers/save"
 	"simple_RESTapi/internal/lib/logger/sl"
 	"simple_RESTapi/internal/storage/postgres"
@@ -55,7 +57,10 @@ func main() {
 
 	router.Use(logger.New(log))
 
+	//routers
 	router.Post("/url", save.New(log, storage))
+	router.Get("/{alias}", redirect.New(log, storage))
+	router.Post("/delete", delete.New(log, storage))
 
 	log.Info("starting server", slog.String("addres", cfg.App.Adres), slog.String("port", strconv.Itoa(cfg.App.Port)))
 

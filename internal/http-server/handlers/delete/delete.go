@@ -1,4 +1,4 @@
-package save
+package delete
 
 import (
 	"errors"
@@ -8,44 +8,37 @@ import (
 
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/render"
-	"github.com/go-playground/validator"
 
 	resp "simple_RESTapi/internal/lib/api/response"
 	"simple_RESTapi/internal/lib/logger/sl"
-	"simple_RESTapi/internal/lib/random"
 	"simple_RESTapi/internal/storage"
 )
 
+// URLDelete is an interface for delete url by alias.
+//
+
 type Request struct {
-	URL   string `json:"url" validate:"required,url"`
-	Alias string `json:"alias,omitempty"`
+	Alias string `json:"alias" validate:"required"`
 }
 
 type Response struct {
 	Status string `json:"status"`
 	Error  string `json:"error,omitempty"`
-	Alias  string `json:"alias"`
 }
 
-//go:generate go run github.com/vektra/mockery/v2@v2.43.1 --name=URLSaver
-type URLSaver interface {
-	SaveURL(URL, alias string) (int64, error)
+//go:generate go run github.com/vektra/mockery/v2@v2.43.1 --name=URLDelete
+type URLDelete interface {
+	URLDelete(alias string) error
 }
 
-const aliasLength = 6
-
-func New(log *slog.Logger, urlSaver URLSaver) http.HandlerFunc {
+func New(log *slog.Logger, URLDelete URLDelete) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		const op = "handlers.url.save.New"
+		const op = "handlers.url.delete.New"
 
-		// Добавляем к текущму объекту логгера поля op и request_id
-		// Они могут очень упростить нам жизнь в будущем
 		log = log.With(
 			slog.String("op", op),
 			slog.String("request_id", middleware.GetReqID(r.Context())),
 		)
-
-		// Создаем объект запроса и анмаршаллим в него запрос
 		var req Request
 
 		err := render.DecodeJSON(r.Body, &req)
@@ -72,41 +65,28 @@ func New(log *slog.Logger, urlSaver URLSaver) http.HandlerFunc {
 
 		// ...
 		alias := req.Alias
-		if alias == "" {
-			alias = random.NewRandomString(aliasLength)
-		}
 
-		if err := validator.New().Struct(req); err != nil {
-			// Приводим ошибку к типу ошибки валидации
-			validateErr := err.(validator.ValidationErrors)
+		// Пробуем удалить строку по alias
+		err = URLDelete.URLDelete(alias)
 
-			log.Error("invalid request", sl.Err(err))
+		if errors.Is(err, storage.ErrURLNotFound) {
+			// Не нашли URL, сообщаем об этом клиенту
+			log.Info("url not found", "alias", alias)
 
-			render.JSON(w, r, resp.Error(validateErr.Error()))
+			render.JSON(w, r, resp.Error("not found"))
 
 			return
 		}
-
-		id, err := urlSaver.SaveURL(req.URL, alias)
-
-		if errors.Is(err, storage.ErrURLExists) {
-
-			//TODO отдельно обраотать данное событие
-			log.Info("url already exists", slog.String("url", req.URL))
-			render.JSON(w, r, resp.Error("url already exists"))
-
-			return
-		}
-
 		if err != nil {
-			log.Error("failed to load url", sl.Err(err))
+			// Не удалось осуществить поиск
+			log.Error("failed to delete url", sl.Err(err))
 
-			render.JSON(w, r, resp.Error("failed to add url"))
+			render.JSON(w, r, resp.Error("internal error"))
 
 			return
 		}
 
-		log.Info("url added", slog.Int64("id", id))
+		log.Info("delete alias", slog.String("alias", alias))
 
 		responseOK(w, r, alias)
 
@@ -117,6 +97,5 @@ func responseOK(w http.ResponseWriter, r *http.Request, alias string) {
 	render.JSON(w, r, Response{
 		Status: resp.OK().Status,
 		Error:  "",
-		Alias:  alias,
 	})
 }
